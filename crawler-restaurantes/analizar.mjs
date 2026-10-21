@@ -33,6 +33,9 @@ const CONC = parseInt((args[args.indexOf('--conc') + 1] || '6'), 10) || 6;
 const REFRESCAR = args.includes('--refrescar');
 // Modo rejilla: --bbox "s,w,n,e" salta Nominatim y usa esa caja directamente.
 const BBOX = args.includes('--bbox') ? (args[args.indexOf('--bbox') + 1] || '') : null;
+// Modo "todos": trae TODOS los locales (aunque no tengan web) y los guarda aunque
+// no haya señal (como punto "sin datos, confírmalo en el sitio").
+const TODOS = args.includes('--todos');
 const CACHE = new URL('./procesados.json', import.meta.url);
 
 if (!ciudad) { console.error('Uso: node analizar.mjs "<ciudad>" [máx] [--conc N] [--refrescar]'); process.exit(1); }
@@ -146,16 +149,20 @@ async function bboxCiudad(nombre) {
 }
 
 async function restaurantesOSM(b, limite) {
-  const am = 'amenity~"^(restaurant|cafe|fast_food|bar)$"';
+  const am = TODOS
+    ? 'amenity~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream|biergarten)$"'
+    : 'amenity~"^(restaurant|cafe|fast_food|bar)$"';
   const bbox = `${b.s},${b.w},${b.n},${b.e}`;
-  const q = `[out:json][timeout:90];(
-    nwr[${am}]["website"](${bbox});
+  // En modo --todos: todos los locales de comida. Si no: solo los que traen web o dieta.
+  const cuerpo = TODOS
+    ? `nwr[${am}](${bbox});`
+    : `nwr[${am}]["website"](${bbox});
     nwr[${am}]["contact:website"](${bbox});
     nwr[${am}]["diet:gluten_free"](${bbox});
     nwr[${am}]["diet:vegan"](${bbox});
     nwr[${am}]["diet:vegetarian"](${bbox});
-    nwr[${am}]["diet:lactose_free"](${bbox});
-  );out center tags ${limite * 3};`;
+    nwr[${am}]["diet:lactose_free"](${bbox});`;
+  const q = `[out:json][timeout:120];(${cuerpo});out center tags ${limite * 4};`;
   for (const ep of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
     try {
       const r = await traer(ep, { method: 'POST', body: 'data=' + encodeURIComponent(q) }, 90000);
@@ -236,6 +243,9 @@ async function pool(items, n, worker) {
       conSenal++;
       resumen = Object.entries(analisis.flags).map(([k, v]) => `${k}:${v}`).join(', ') || (analisis.conciencia ? 'menciona alergenos' : 'sin datos');
       if ((await guardar(r, analisis)) === 'ok') guardados++;
+    } else if (TODOS) {
+      // Sin señal: en modo todos lo guardamos igual como punto "sin datos".
+      if ((await guardar(r, null)) === 'ok') guardados++;
     }
     procesados.add(r.osm_id);
     resultados.push({ nombre: r.nombre, osm_id: r.osm_id, web: r.web, resumen });
