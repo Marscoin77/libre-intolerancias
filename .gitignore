@@ -1,0 +1,55 @@
+# === Dependencias ===
+node_modules/
+**/node_modules/
+
+# === Expo / React Native ===
+.expo/
+**/.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
+
+# === Build nativo Android/iOS (se regenera con expo prebuild) ===
+Libre/android/
+Libre/ios/
+**/build/
+**/.gradle/
+**/.cxx/
+
+# === APK / binarios pesados (no van a git; GitHub rechaza >100 MB) ===
+*.apk
+*.aab
+*.keystore
+
+# === Secretos (nunca subir) ===
+.env
+.env.*
+*.pem
+*.key
+admin_token*.txt
+**/wrangler/secrets*
+
+# === Caché del analizador de restaurantes (estado de ejecución) ===
+crawler-restaurantes/procesados.json
+crawler-restaurantes/ultimo-resultado.json
+crawler-restaurantes/_t.mjs
+
+# === Cloudflare ===
+.wrangler/
+**/.wrangler/
+
+# === Capturas/sueltos en la raíz ===
+/f3c4d972-239a-483e-9b41-6e25efaf4f8b.png
+
+# === Sistema / editores ===
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+npm-debug.*
+yarn-error.*

@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Libre",
+    "slug": "Libre",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "libre",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.libreapp.intolerancias"
+    },
+    "android": {
+      "package": "com.libreapp.intolerancias",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Libre necesita la cámara para escanear códigos de barras y fotografiar etiquetas de productos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Libre usa tu ubicación para mostrarte los supermercados más cercanos con productos compatibles."
+        }
+      ],
+      "expo-font",
+      "expo-mlkit-ocr",
+      "expo-image"
+    ]
+  }
+}

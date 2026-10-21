@@ -1,0 +1,12 @@
+name = "libre-api"
+main = "src/index.js"
+compatibility_date = "2025-10-01"
+
+# Base de datos D1 con el catálogo de productos (41k)
+[[d1_databases]]
+binding = "DB"
+database_name = "libre-productos"
+database_id = "12a958db-5c1d-49b8-92e5-cb91e8702f1c"
+
+[observability]
+enabled = true
