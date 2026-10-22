@@ -195,6 +195,21 @@ async function importarOsm(env, request) {
   return json({ ok: true });
 }
 
+// Lista (paginada por cursor osm_id) los restaurantes que tienen web pero aún
+// no tienen análisis, para reanalizarlos con más palabras clave.
+async function listarPendientesWeb(env, request, q) {
+  if (!env.ADMIN_TOKEN || request.headers.get('x-admin-token') !== env.ADMIN_TOKEN)
+    return json({ error: 'no autorizado' }, 401);
+  const limite = Math.min(parseInt(q.get('limit') || '500', 10) || 500, 1000);
+  const desde = q.get('desde') || '';
+  const rows = await env.DB.prepare(
+    `select osm_id, nombre, lat, lon, sitio_web, ciudad, tipo_cocina, telefono from restaurantes
+     where analisis is null and sitio_web is not null and sitio_web <> '' and osm_id > ?
+     order by osm_id limit ?`
+  ).bind(desde, limite).all();
+  return json(rows.results || []);
+}
+
 const aValoracion = (r) => ({
   id: r.id, restaurante_id: r.restaurante_id, usuario_id: r.usuario_id,
   estrellas: Number(r.estrellas), intolerancias_ok: jarr(r.intolerancias_ok),
@@ -332,6 +347,7 @@ export default {
       if (path === '/reportes' && m === 'POST') return crearReporte(env, await body());
 
       if (path === '/admin/restaurantes' && m === 'POST') return importarOsm(env, request);
+      if (path === '/admin/pendientes-web' && m === 'GET') return listarPendientesWeb(env, request, q);
 
       return json({ error: 'no encontrado' }, 404);
     } catch (e) {
