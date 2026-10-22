@@ -36,6 +36,9 @@ const BBOX = args.includes('--bbox') ? (args[args.indexOf('--bbox') + 1] || '') 
 // Modo "todos": trae TODOS los locales (aunque no tengan web) y los guarda aunque
 // no haya señal (como punto "sin datos, confírmalo en el sitio").
 const TODOS = args.includes('--todos');
+// Modo "comercios": en vez de locales para comer, trae tiendas de alimentación
+// relevantes para intolerancias (panaderías, pastelerías, dieta/sin gluten...).
+const SHOPS = args.includes('--shops');
 const CACHE = new URL('./procesados.json', import.meta.url);
 
 if (!ciudad) { console.error('Uso: node analizar.mjs "<ciudad>" [máx] [--conc N] [--refrescar]'); process.exit(1); }
@@ -148,13 +151,22 @@ async function bboxCiudad(nombre) {
   return { s, n, w, e, nombre: j[0].display_name };
 }
 
+// Tiendas de alimentación relevantes para intolerancias → etiqueta en español.
+const SHOP_TIPO = {
+  bakery: 'panadería', pastry: 'pastelería', confectionery: 'confitería',
+  chocolate: 'chocolatería', deli: 'charcutería / delicatessen', health_food: 'dieta / sin gluten',
+  dairy: 'lechería', greengrocer: 'frutería', farm: 'tienda de productor',
+};
+
 async function restaurantesOSM(b, limite) {
-  const am = TODOS
-    ? 'amenity~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream|biergarten)$"'
-    : 'amenity~"^(restaurant|cafe|fast_food|bar)$"';
+  const am = SHOPS
+    ? `shop~"^(${Object.keys(SHOP_TIPO).join('|')})$"`
+    : TODOS
+      ? 'amenity~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream|biergarten)$"'
+      : 'amenity~"^(restaurant|cafe|fast_food|bar)$"';
   const bbox = `${b.s},${b.w},${b.n},${b.e}`;
-  // En modo --todos: todos los locales de comida. Si no: solo los que traen web o dieta.
-  const cuerpo = TODOS
+  // En modo --shops/--todos: todos los locales. Si no: solo los que traen web o dieta.
+  const cuerpo = (TODOS || SHOPS)
     ? `nwr[${am}](${bbox});`
     : `nwr[${am}]["website"](${bbox});
     nwr[${am}]["contact:website"](${bbox});
@@ -180,7 +192,7 @@ async function restaurantesOSM(b, limite) {
         out.push({
           osm_id, nombre: tg.name, lat, lon,
           web: tg.website || tg['contact:website'] || null,
-          tipo_cocina: tg.cuisine?.replace(/[_;]/g, ' ') || null,
+          tipo_cocina: (SHOPS ? SHOP_TIPO[tg.shop] : tg.cuisine?.replace(/[_;]/g, ' ')) || null,
           telefono: tg.phone || tg['contact:phone'] || null,
           tags: tg,
         });
@@ -243,8 +255,8 @@ async function pool(items, n, worker) {
       conSenal++;
       resumen = Object.entries(analisis.flags).map(([k, v]) => `${k}:${v}`).join(', ') || (analisis.conciencia ? 'menciona alergenos' : 'sin datos');
       if ((await guardar(r, analisis)) === 'ok') guardados++;
-    } else if (TODOS) {
-      // Sin señal: en modo todos lo guardamos igual como punto "sin datos".
+    } else if (TODOS || SHOPS) {
+      // Sin señal: en modo todos/comercios lo guardamos igual como punto "sin datos".
       if ((await guardar(r, null)) === 'ok') guardados++;
     }
     procesados.add(r.osm_id);

@@ -70,6 +70,7 @@ for (const { r, cas } of planes) {
     process.stdout.write(`\n[${global}/${totalCas} · ${r.label} ${i}/${cas.length}] ${bbox}\n`);
     const argsAnal = [ANALIZADOR, r.label, String(MAX), '--conc', String(CONC), '--bbox', bbox];
     if (process.env.TODOS) argsAnal.push('--todos');
+    if (process.env.SHOPS) argsAnal.push('--shops');
     try {
       execFileSync('node', argsAnal, {
         stdio: 'inherit', env: process.env,
