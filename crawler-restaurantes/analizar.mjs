@@ -155,18 +155,34 @@ async function bboxCiudad(nombre) {
 const SHOP_TIPO = {
   bakery: 'panadería', pastry: 'pastelería', confectionery: 'confitería',
   chocolate: 'chocolatería', deli: 'charcutería / delicatessen', health_food: 'dieta / sin gluten',
-  dairy: 'lechería', greengrocer: 'frutería', farm: 'tienda de productor',
+  dairy: 'lechería', greengrocer: 'frutería', farm: 'tienda de productor', organic: 'ecológica / bio',
 };
 
+// Etiqueta para una tienda a partir de su tipo o, si no, de sus señales de dieta.
+function tipoTienda(tg) {
+  if (SHOP_TIPO[tg.shop]) return SHOP_TIPO[tg.shop];
+  if (tg['diet:gluten_free'] && tg['diet:gluten_free'] !== 'no') return 'tienda sin gluten';
+  if (tg['diet:lactose_free'] && tg['diet:lactose_free'] !== 'no') return 'tienda sin lactosa';
+  if (tg['diet:vegan'] && tg['diet:vegan'] !== 'no') return 'tienda vegana';
+  return 'tienda de alimentación';
+}
+
 async function restaurantesOSM(b, limite) {
-  const am = SHOPS
-    ? `shop~"^(${Object.keys(SHOP_TIPO).join('|')})$"`
-    : TODOS
-      ? 'amenity~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream|biergarten)$"'
-      : 'amenity~"^(restaurant|cafe|fast_food|bar)$"';
+  const am = TODOS
+    ? 'amenity~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream|biergarten)$"'
+    : 'amenity~"^(restaurant|cafe|fast_food|bar)$"';
   const bbox = `${b.s},${b.w},${b.n},${b.e}`;
+  // Modo --shops: tiendas de alimentación relevantes + CUALQUIER tienda marcada
+  // en OSM como sin gluten / sin lactosa / vegana (aunque sea súper o normal).
+  const cuerpoShops = `nwr[shop~"^(${Object.keys(SHOP_TIPO).join('|')})$"](${bbox});
+    nwr[shop]["diet:gluten_free"~"^(yes|only|limited)$"](${bbox});
+    nwr[shop]["diet:lactose_free"~"^(yes|only|limited)$"](${bbox});
+    nwr[shop]["diet:vegan"~"^(yes|only)$"](${bbox});
+    nwr[shop]["gluten_free"~"."](${bbox});`;
   // En modo --shops/--todos: todos los locales. Si no: solo los que traen web o dieta.
-  const cuerpo = (TODOS || SHOPS)
+  const cuerpo = SHOPS
+    ? cuerpoShops
+    : TODOS
     ? `nwr[${am}](${bbox});`
     : `nwr[${am}]["website"](${bbox});
     nwr[${am}]["contact:website"](${bbox});
@@ -192,7 +208,7 @@ async function restaurantesOSM(b, limite) {
         out.push({
           osm_id, nombre: tg.name, lat, lon,
           web: tg.website || tg['contact:website'] || null,
-          tipo_cocina: (SHOPS ? SHOP_TIPO[tg.shop] : tg.cuisine?.replace(/[_;]/g, ' ')) || null,
+          tipo_cocina: (SHOPS ? tipoTienda(tg) : tg.cuisine?.replace(/[_;]/g, ' ')) || null,
           telefono: tg.phone || tg['contact:phone'] || null,
           tags: tg,
         });

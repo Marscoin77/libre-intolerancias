@@ -210,6 +210,19 @@ async function listarPendientesWeb(env, request, q) {
   return json(rows.results || []);
 }
 
+// Lista (paginada por cursor) solo los osm_id, para reconstruir la caché local
+// del rastreador (procesados.json) sin bajarse toda la fila.
+async function listarIds(env, request, q) {
+  if (!env.ADMIN_TOKEN || request.headers.get('x-admin-token') !== env.ADMIN_TOKEN)
+    return json({ error: 'no autorizado' }, 401);
+  const limite = Math.min(parseInt(q.get('limit') || '20000', 10) || 20000, 50000);
+  const desde = q.get('desde') || '';
+  const rows = await env.DB.prepare(
+    `select osm_id from restaurantes where osm_id is not null and osm_id > ? order by osm_id limit ?`
+  ).bind(desde, limite).all();
+  return json((rows.results || []).map((r) => r.osm_id));
+}
+
 // Valoración y reseñas EN VIVO desde Google Places API (New). Por licencia de
 // Google solo se puede mostrar en el momento: NO se guardan rating ni reseñas.
 // Lo único que cacheamos es el place_id (eso sí lo permite su política).
@@ -398,6 +411,7 @@ export default {
 
       if (path === '/admin/restaurantes' && m === 'POST') return importarOsm(env, request);
       if (path === '/admin/pendientes-web' && m === 'GET') return listarPendientesWeb(env, request, q);
+      if (path === '/admin/ids' && m === 'GET') return listarIds(env, request, q);
       if (path === '/google' && m === 'GET') return googlePlaces(env, q);
 
       return json({ error: 'no encontrado' }, 404);
