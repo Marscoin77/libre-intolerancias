@@ -6,6 +6,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { INTOLERANCIAS, IntoleranciaId } from '../../src/data/intolerancias';
 import { usePerfil } from '../../src/lib/PerfilContext';
 import {
+  GoogleInfo,
   RestauranteResumen,
   Valoracion,
   asegurarSesion,
@@ -13,6 +14,7 @@ import {
   guardarApodo,
   miValoracion,
   obtenerApodo,
+  obtenerGoogle,
   obtenerRestaurante,
   reportar,
   valorar,
@@ -26,6 +28,13 @@ const NOMBRE_INTOL: Record<string, { nombre: string; emoji: string }> = Object.f
 const APTO_LABEL: Record<string, string> = {
   gluten: 'Sin gluten', lactosa: 'Sin lactosa', huevo: 'Sin huevo',
   frutos_secos: 'Sin frutos secos', soja: 'Sin soja', vegano: 'Vegano', vegetariano: 'Vegetariano',
+};
+const PRECIO: Record<string, string> = {
+  PRICE_LEVEL_FREE: 'Gratis',
+  PRICE_LEVEL_INEXPENSIVE: '€',
+  PRICE_LEVEL_MODERATE: '€€',
+  PRICE_LEVEL_EXPENSIVE: '€€€',
+  PRICE_LEVEL_VERY_EXPENSIVE: '€€€€',
 };
 const colorApto = (e: string) =>
   e === 'apto'
@@ -64,6 +73,7 @@ export default function RestauranteScreen() {
   const [valoraciones, setValoraciones] = useState<Valoracion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [google, setGoogle] = useState<GoogleInfo | null>(null);
 
   const [modal, setModal] = useState(false);
   const [estrellas, setEstrellas] = useState(0);
@@ -91,6 +101,16 @@ export default function RestauranteScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     cargar();
   }, [cargar]);
+
+  // Valoración de Google en vivo (no bloquea la carga principal; se añade cuando llega).
+  useEffect(() => {
+    if (!id) return;
+    const ctrl = new AbortController();
+    obtenerGoogle(id, ctrl.signal)
+      .then((g) => setGoogle(g))
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [id]);
 
   async function abrirValorar() {
     try {
@@ -223,6 +243,41 @@ export default function RestauranteScreen() {
           </View>
         )}
 
+        {google?.disponible && (
+          <View style={styles.googleBox}>
+            <Text style={styles.analisisTit}>Valoración en Google</Text>
+            {typeof google.rating === 'number' && (
+              <View style={styles.filaMedia}>
+                <Estrellas valor={google.rating} tam={18} />
+                <Text style={styles.mediaTexto}>
+                  {google.rating.toFixed(1)}
+                  {google.total ? ` · ${google.total} reseña${google.total === 1 ? '' : 's'}` : ''}
+                  {PRECIO[google.precio ?? ''] ? ` · ${PRECIO[google.precio!]}` : ''}
+                </Text>
+              </View>
+            )}
+            {google.resumen ? <Text style={styles.googleResumen}>{google.resumen}</Text> : null}
+            {(google.resenas ?? []).slice(0, 3).map((rs, i) => (
+              <View key={i} style={styles.resena}>
+                <View style={styles.valCabecera}>
+                  <Text style={styles.valApodo}>{rs.autor ?? 'Google'}</Text>
+                  {typeof rs.nota === 'number' ? <Estrellas valor={rs.nota} /> : null}
+                </View>
+                {rs.texto ? <Text style={styles.resenaTxt} numberOfLines={5}>{rs.texto}</Text> : null}
+                {rs.cuando ? <Text style={styles.resenaCuando}>{rs.cuando}</Text> : null}
+              </View>
+            ))}
+            {google.maps_uri ? (
+              <Pressable style={styles.googleBoton} onPress={() => Linking.openURL(google.maps_uri!)}>
+                <Text style={styles.googleBotonTxt}>Ver carta, fotos y más reseñas en Google Maps</Text>
+              </Pressable>
+            ) : null}
+            <Text style={styles.analisisNota}>
+              Datos en vivo de Google. La carta y las fotos se abren en Google Maps.
+            </Text>
+          </View>
+        )}
+
         {(restaurante.telefono || restaurante.sitio_web) && (
           <View style={styles.filaAcciones}>
             {restaurante.telefono ? (
@@ -341,6 +396,13 @@ const styles = StyleSheet.create({
   aChip: { borderRadius: radius.pill, paddingVertical: 5, paddingHorizontal: 11 },
   aChipTxt: { fontSize: 12, fontWeight: '700' },
   analisisNota: { fontSize: 11, color: colors.textMuted, marginTop: 8, lineHeight: 16 },
+  googleBox: { marginTop: 14, backgroundColor: colors.card, ...sombra, borderRadius: radius.lg, padding: 14 },
+  googleResumen: { fontSize: 13, color: colors.textDark, marginTop: 8, lineHeight: 19 },
+  resena: { marginTop: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10 },
+  resenaTxt: { fontSize: 13, color: colors.textDark, marginTop: 5, lineHeight: 19 },
+  resenaCuando: { fontSize: 11, color: colors.textMuted, marginTop: 4 },
+  googleBoton: { marginTop: 12, backgroundColor: colors.bgAlt, borderRadius: radius.md, paddingVertical: 11, alignItems: 'center' },
+  googleBotonTxt: { color: colors.textOnDark, fontWeight: '700', fontSize: 13 },
   filaAcciones: { flexDirection: 'row', gap: 10, marginTop: 14 },
   accion: { backgroundColor: colors.bgAlt, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 16 },
   accionTexto: { color: colors.textOnDark, fontWeight: '600', fontSize: 13 },

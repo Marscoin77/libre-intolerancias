@@ -210,6 +210,56 @@ async function listarPendientesWeb(env, request, q) {
   return json(rows.results || []);
 }
 
+// Valoración y reseñas EN VIVO desde Google Places API (New). Por licencia de
+// Google solo se puede mostrar en el momento: NO se guardan rating ni reseñas.
+// Lo único que cacheamos es el place_id (eso sí lo permite su política).
+async function googlePlaces(env, q) {
+  const id = q.get('id');
+  if (!id) return json({ error: 'falta id' }, 400);
+  if (!env.GOOGLE_API_KEY) return json({ disponible: false, motivo: 'sin-clave' });
+  const r = await env.DB.prepare('select id, nombre, lat, lon, ciudad, place_id from restaurantes where id = ?').bind(id).first();
+  if (!r) return json({ disponible: false, motivo: 'no-existe' });
+  const KEY = env.GOOGLE_API_KEY;
+  try {
+    let placeId = r.place_id;
+    if (!placeId) {
+      const bu = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': 'places.id,places.location' },
+        body: JSON.stringify({
+          textQuery: r.nombre + (r.ciudad ? ' ' + r.ciudad : ''),
+          locationBias: { circle: { center: { latitude: Number(r.lat), longitude: Number(r.lon) }, radius: 400 } },
+          maxResultCount: 1, languageCode: 'es', regionCode: 'ES',
+        }),
+      });
+      const bj = await bu.json();
+      placeId = bj?.places?.[0]?.id || null;
+      if (placeId) await env.DB.prepare('update restaurantes set place_id = ? where id = ?').bind(placeId, id).run();
+    }
+    if (!placeId) return json({ disponible: false, motivo: 'no-encontrado' });
+    const du = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=es`, {
+      headers: { 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': 'rating,userRatingCount,priceLevel,googleMapsUri,websiteUri,editorialSummary,reviews' },
+    });
+    const d = await du.json();
+    if (d.error) return json({ disponible: false, motivo: 'detalle', detalle: d.error.message || '' });
+    const resenas = (d.reviews || []).slice(0, 4).map((rv) => ({
+      autor: rv.authorAttribution?.displayName || null,
+      nota: rv.rating ?? null,
+      texto: (rv.text?.text || rv.originalText?.text || '').slice(0, 600),
+      cuando: rv.relativePublishingTimeDescription || null,
+    }));
+    return json({
+      disponible: true, place_id: placeId,
+      rating: d.rating ?? null, total: d.userRatingCount ?? null,
+      precio: d.priceLevel || null, maps_uri: d.googleMapsUri || null,
+      web: d.websiteUri || null, resumen: d.editorialSummary?.text || null,
+      resenas,
+    });
+  } catch (e) {
+    return json({ disponible: false, motivo: 'error', detalle: String((e && e.message) || e) });
+  }
+}
+
 const aValoracion = (r) => ({
   id: r.id, restaurante_id: r.restaurante_id, usuario_id: r.usuario_id,
   estrellas: Number(r.estrellas), intolerancias_ok: jarr(r.intolerancias_ok),
@@ -348,6 +398,7 @@ export default {
 
       if (path === '/admin/restaurantes' && m === 'POST') return importarOsm(env, request);
       if (path === '/admin/pendientes-web' && m === 'GET') return listarPendientesWeb(env, request, q);
+      if (path === '/google' && m === 'GET') return googlePlaces(env, q);
 
       return json({ error: 'no encontrado' }, 404);
     } catch (e) {

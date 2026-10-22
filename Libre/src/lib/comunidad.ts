@@ -48,6 +48,27 @@ export interface RestauranteResumen {
   num_valoraciones: number;
 }
 
+/** Reseña individual de Google (se muestra en vivo, no se guarda). */
+export interface ResenaGoogle {
+  autor: string | null;
+  nota: number | null;
+  texto: string;
+  cuando: string | null;
+}
+
+/** Valoración y reseñas en vivo de Google Places (por licencia no se persisten). */
+export interface GoogleInfo {
+  disponible: boolean;
+  motivo?: string;
+  rating?: number | null;
+  total?: number | null;
+  precio?: string | null;
+  maps_uri?: string | null;
+  web?: string | null;
+  resumen?: string | null;
+  resenas?: ResenaGoogle[];
+}
+
 export interface Valoracion {
   id: string;
   restaurante_id: string;
@@ -148,6 +169,15 @@ export async function cargarRestaurantes(b: Bounds, signal?: AbortSignal): Promi
 
 export async function obtenerRestaurante(id: string): Promise<RestauranteResumen | null> {
   return pedir<RestauranteResumen | null>(`/restaurantes/${encodeURIComponent(id)}`);
+}
+
+/** Valoración y reseñas en vivo de Google Places. Devuelve disponible:false si no hay clave o no se encuentra. */
+export async function obtenerGoogle(id: string, signal?: AbortSignal): Promise<GoogleInfo> {
+  try {
+    return await pedir<GoogleInfo>(`/google?id=${encodeURIComponent(id)}`, undefined, signal);
+  } catch {
+    return { disponible: false, motivo: 'error' };
+  }
 }
 
 /** Añade un restaurante y devuelve su id. Crea la sesión anónima si hace falta. */
